@@ -32,8 +32,11 @@ mlartifacts/
 *.pth
 *.joblib
 *.pkl
+# Full datasets (downloaded on demand); only small vendored samples are committed.
 data/raw/
 data/processed/
+ml/data/raw/
+ml/data/processed/
 
 # ---- Node / Next.js ----
 node_modules/
