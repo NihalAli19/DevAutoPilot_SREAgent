@@ -1,0 +1,25 @@
+<!--
+  Azure API Management (Consumption) inbound policy — STUB.
+  TODO(plan: Phase 4) — finalize subscription-key enforcement, per-tenant
+  rate-limit/quota, and request/response transformation.
+-->
+<policies>
+  <inbound>
+    <base />
+    <!-- Per-subscription rate limit: 60 calls / 60s (tune per tenant). -->
+    <rate-limit calls="60" renewal-period="60" />
+    <!-- Monthly quota: 10000 calls per subscription. -->
+    <quota calls="10000" renewal-period="2592000" />
+    <!-- TODO(plan: Phase 4): validate subscription key / JWT, set backend URL,
+         and add request transformation (e.g. inject org_id header). -->
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>
