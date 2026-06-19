@@ -1,4 +1,5 @@
 """Agent state / action Pydantic models."""
+
 # TODO(plan: Phase 3) — model agent steps, tokens, latency, trace ids.
 from __future__ import annotations
 

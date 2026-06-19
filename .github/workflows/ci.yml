@@ -2,17 +2,56 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
+
+# Cancel superseded runs on the same branch/PR to save Actions minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
+  # ----------------------------------------------------------------------------
+  # Backend: lint, format check, type check, and tests with a coverage floor.
+  # Any failing step fails the job, which (with branch protection) blocks merge.
+  # ----------------------------------------------------------------------------
   backend:
-    name: Backend (lint + test)
+    name: Backend (lint, types, tests)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Dummy values so app/config.py loads in CI. NEVER put real secrets here --
+      # use GitHub repo secrets for anything real (none are needed for CI tests).
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/test
+      OPENAI_API_KEY: test-key
+      GEMINI_API_KEY: test-key
+      OLLAMA_BASE_URL: http://localhost:11434
+      AZURE_SEARCH_ENDPOINT: http://localhost
+      AZURE_SEARCH_KEY: test-key
+      GITHUB_TOKEN_APP: test-key
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,12 +63,43 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Lint (ruff)
         run: ruff check .
 
-      - name: Test (pytest)
+      - name: Format check (ruff)
+        run: ruff format --check .
+
+      - name: Type check (mypy)
+        run: mypy app
+
+      - name: Tests (pytest + coverage gate)
+        run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=50
+
+  # ----------------------------------------------------------------------------
+  # ML: lightweight tests for the pipeline code (feature engineering, smoke tests).
+  # Heavy training/eval lives in ml-pipeline.yml, not here.
+  # ----------------------------------------------------------------------------
+  ml:
+    name: ML (pipeline tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ml
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ml/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Tests (pytest)
         run: pytest -q

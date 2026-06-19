@@ -10,4 +10,6 @@ agent-framework
 openai
 pytest
 pytest-asyncio
+pytest-cov
+mypy
 ruff

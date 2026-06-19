@@ -1,4 +1,5 @@
 """Smoke test for the /health endpoint."""
+
 import pytest
 
 

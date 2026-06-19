@@ -1,4 +1,5 @@
 """Application configuration via pydantic-settings (reads .env, no hardcoded secrets)."""
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -30,9 +31,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
 
     # ---- Data layer ----
-    database_url: str = (
-        "postgresql+asyncpg://devautopilot:devautopilot@localhost:5432/devautopilot"
-    )
+    database_url: str = "postgresql+asyncpg://devautopilot:devautopilot@localhost:5432/devautopilot"
 
     # ---- Azure AI Search (RAG vector store) ----
     azure_search_endpoint: str | None = None
