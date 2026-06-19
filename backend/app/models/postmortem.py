@@ -1,4 +1,5 @@
 """Postmortem Pydantic models."""
+
 # TODO(plan: Phase 3) — model timeline, action items, and embedding status.
 from __future__ import annotations
 

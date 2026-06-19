@@ -1,4 +1,5 @@
 """Model-run (MLOps audit) Pydantic models."""
+
 # TODO(plan: Phase 1) — model version, metrics, drift, deployment status.
 from __future__ import annotations
 

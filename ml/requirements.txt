@@ -3,3 +3,4 @@ torch
 mlflow
 pandas
 numpy
+pytest

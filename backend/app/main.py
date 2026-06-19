@@ -1,4 +1,5 @@
 """FastAPI application entrypoint: app factory, CORS, and a working /health route."""
+
 from __future__ import annotations
 
 from fastapi import FastAPI

@@ -1,4 +1,5 @@
 """Structured (JSON) logging helper."""
+
 # TODO(plan: Phase 0) — replace with full JSON formatter + correlation ids.
 from __future__ import annotations
 

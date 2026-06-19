@@ -1,0 +1,131 @@
+name: Deploy (backend -> Azure Container Apps)
+
+# ============================================================================
+# ONE-TIME SETUP (do these once before this workflow can run)
+#
+# 1. Create the Azure resources (free-tier friendly):
+#      az group create -n devautopilot-rg -l eastus
+#      az containerapp env create -n devautopilot-env -g devautopilot-rg -l eastus
+#      az containerapp create -n devautopilot-backend -g devautopilot-rg \
+#        --environment devautopilot-env \
+#        --image ghcr.io/<owner>/<repo>/devautopilot-backend:latest \
+#        --target-port 8000 --ingress external --min-replicas 0
+#      (min-replicas 0 keeps it at $0 when idle; first request cold-starts it.)
+#
+# 2. Set up OIDC (no long-lived secrets). Create an app registration with a
+#    federated credential scoped to this repo's `main` + `production` env, then
+#    grant it Contributor on the resource group. Microsoft Learn: "Use the Azure
+#    Login action with OpenID Connect".
+#
+# 3. In GitHub repo settings add:
+#    Secrets:   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+#    Variables: AZURE_RESOURCE_GROUP, AZURE_CONTAINER_APP
+#    Environment named `production` with required reviewers (the approval gate).
+#
+# 4. Make the ghcr package public (Packages -> package -> settings) so Container
+#    Apps can pull it without registry credentials. Or wire up a pull secret.
+# ============================================================================
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: {}   # allow manual deploys from the Actions tab
+
+# Never run two production deploys at once; don't cancel one mid-flight.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write       # push image to ghcr.io
+  id-token: write        # OIDC login to Azure
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}/devautopilot-backend
+
+jobs:
+  build-and-push:
+    name: Build & push image
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Container Apps
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # The approval gate: a human must approve before production updates.
+    environment:
+      name: production
+      url: ${{ steps.deployed.outputs.url }}
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy new image
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az extension add --name containerapp --upgrade --only-show-errors
+            az containerapp update \
+              --name "${{ vars.AZURE_CONTAINER_APP }}" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --image "${{ env.IMAGE }}:${{ needs.build-and-push.outputs.image_tag }}"
+
+      - name: Resolve public URL
+        id: deployed
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            FQDN=$(az containerapp show \
+              --name "${{ vars.AZURE_CONTAINER_APP }}" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --query properties.configuration.ingress.fqdn -o tsv)
+            echo "url=https://$FQDN" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test (/health must return 200)
+        run: |
+          URL="${{ steps.deployed.outputs.url }}/health"
+          echo "Probing $URL (cold start may take ~30-60s)..."
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$URL" || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "Healthy"
+              exit 0
+            fi
+            echo "Attempt $i: got $code, retrying in 10s..."
+            sleep 10
+          done
+          echo "Deploy verification failed: /health never returned 200"
+          exit 1
