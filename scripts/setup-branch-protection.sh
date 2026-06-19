@@ -65,6 +65,12 @@ gh api "repos/$REPO/branches/main/protection" -q \
    "  force pushes    : \(.allow_force_pushes.enabled)",
    "  deletions       : \(.allow_deletions.enabled)"'
 
+# --- enable repo-level auto-merge (required for `gh pr merge --auto`) --------
+echo ""
+echo "Enabling repo setting: allow auto-merge..."
+gh api -X PATCH "repos/$REPO" -F allow_auto_merge=true \
+  -q '"  allow_auto_merge: \(.allow_auto_merge)"'
+
 # --- let the open PR flow through (merges only once checks are green) --------
 echo ""
 PR="$(gh pr list --base main --state open --json number -q '.[0].number' 2>/dev/null || true)"
