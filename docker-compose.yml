@@ -1,0 +1,38 @@
+# Local development stack: PostgreSQL + FastAPI backend.
+# Usage: docker compose up --build
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: devautopilot-postgres
+    environment:
+      POSTGRES_USER: devautopilot
+      POSTGRES_PASSWORD: devautopilot
+      POSTGRES_DB: devautopilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devautopilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: devautopilot-backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://devautopilot:devautopilot@postgres:5432/devautopilot
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
