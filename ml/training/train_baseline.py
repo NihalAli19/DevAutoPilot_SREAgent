@@ -8,7 +8,7 @@ from training.detectors import RobustZScoreDetector
 
 def main() -> None:
     det = RobustZScoreDetector()
-    metrics = train_and_log(det, {"window": det.window})
+    metrics, _ = train_and_log(det, {"window": det.window})
     print("robust_zscore:", metrics)
 
 

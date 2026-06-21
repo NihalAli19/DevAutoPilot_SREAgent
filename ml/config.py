@@ -10,7 +10,10 @@ DATA_DIR = ML_DIR / "data"
 RAW_DIR = DATA_DIR / "raw"  # full datasets (gitignored)
 SAMPLE_DIR = DATA_DIR / "sample"  # small vendored slice (committed)
 PROCESSED_DIR = DATA_DIR / "processed"  # gitignored
-ARTIFACTS_DIR = ML_DIR / "artifacts"  # local model artifacts (gitignored)
+ARTIFACTS_DIR = ML_DIR / "artifacts"  # local eval output (gitignored)
+MODELS_DIR = ML_DIR / "models"  # saved serving artifacts (gitignored)
+# Default in-process serving artifact (Isolation Forest bundle).
+DEFAULT_MODEL_PATH = MODELS_DIR / "isolation_forest.joblib"
 
 # The vendored NAB sample used by tests/CI (a real slice of NAB realAWSCloudwatch).
 SAMPLE_SERIES = "ec2_cpu_utilization_5f5533.csv"

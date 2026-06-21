@@ -27,6 +27,7 @@ env/
 # ---- ML ----
 mlruns/
 mlartifacts/
+mlflow.db
 *.ckpt
 *.pt
 *.pth
@@ -38,6 +39,7 @@ data/processed/
 ml/data/raw/
 ml/data/processed/
 ml/artifacts/
+ml/models/
 
 # ---- Node / Next.js ----
 node_modules/
