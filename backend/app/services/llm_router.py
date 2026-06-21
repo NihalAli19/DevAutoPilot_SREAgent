@@ -126,3 +126,29 @@ class LLMRouter:
         ]
         result = self.complete(messages, json_mode=True)
         return json.loads(result.content)
+
+    def chat_client(self):  # noqa: ANN201 — returns an agent_framework chat client
+        """Build the agent-framework chat client for the configured default provider.
+
+        This is the entrypoint agents use; ``complete``/``classify`` above remain the
+        direct (non-agent) path. Provider is config-driven (``llm_default_provider``).
+        """
+        s = self.settings
+        provider = s.llm_default_provider
+        if provider == "ollama":
+            from agent_framework.ollama import OllamaChatClient
+
+            return OllamaChatClient(host=s.ollama_base_url, model=s.ollama_model)
+        if provider in ("openai", "azure"):
+            from agent_framework.openai import OpenAIChatClient
+
+            return OpenAIChatClient(model=s.llm_cloud_model, api_key=s.openai_api_key)
+        if provider == "gemini":
+            from agent_framework.openai import OpenAIChatClient
+
+            return OpenAIChatClient(
+                model=s.llm_cloud_model,
+                api_key=s.gemini_api_key,
+                base_url=GEMINI_OPENAI_BASE_URL,
+            )
+        raise ValueError(f"unknown llm_default_provider: {provider!r}")

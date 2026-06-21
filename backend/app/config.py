@@ -46,6 +46,7 @@ class Settings(BaseSettings):
 
     # ---- LLM routing ----
     # Local Ollama is the default; cloud (OpenAI/Gemini) is the fallback.
+    llm_default_provider: str = "ollama"  # ollama | openai | azure | gemini
     ollama_model: str = "llama3.1"
     llm_cloud_model: str = "gpt-5-mini"
 
