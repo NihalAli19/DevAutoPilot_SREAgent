@@ -73,10 +73,14 @@ def format_table(results: Mapping[str, Metrics]) -> str:
     return "\n".join([header, *rows])
 
 
-def run_comparison(
+def train_all(
     train_frac: float = 0.5, use_real: bool = True, lstm_epochs: int = 12
-) -> dict:
-    """Train all three detectors and return their metrics + dataset summary."""
+) -> tuple[list[tuple[object, Metrics]], dict[str, float], bool]:
+    """Fit all three detectors; return ``[(fitted_detector, metrics), ...]`` + context.
+
+    Shared by ``run_comparison`` (reporting) and ``register_best`` (which needs the
+    fitted models to log to the registry).
+    """
     from training.dataset import dataset_summary, prepare_datasets, using_real_nab
     from training.detectors import IsolationForestDetector, RobustZScoreDetector
     from training.lstm_ae import LSTMAutoencoderDetector
@@ -89,15 +93,22 @@ def run_comparison(
         IsolationForestDetector(),
         LSTMAutoencoderDetector(epochs=lstm_epochs),
     ]
-    results: dict[str, Metrics] = {}
+    fitted: list[tuple[object, Metrics]] = []
     for det in detectors:
         det.fit(train)
-        results[det.name] = compute_metrics(y, det.score(test))
+        fitted.append((det, compute_metrics(y, det.score(test))))
+    return fitted, dataset_summary(train, test), using_real_nab()
 
+
+def run_comparison(
+    train_frac: float = 0.5, use_real: bool = True, lstm_epochs: int = 12
+) -> dict:
+    """Train all three detectors and return their metrics + dataset summary."""
+    fitted, summary, real_nab = train_all(train_frac, use_real, lstm_epochs)
     return {
-        "results": results,
-        "summary": dataset_summary(train, test),
-        "real_nab": using_real_nab(),
+        "results": {det.name: metrics for det, metrics in fitted},
+        "summary": summary,
+        "real_nab": real_nab,
     }
 
 

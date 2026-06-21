@@ -49,6 +49,9 @@ jobs:
       - name: Train + evaluate + gate (fails if PR-AUC < floor)
         run: python -m evaluation.evaluate
 
+      - name: Register best model (runs only if the gate passed)
+        run: python -m training.register_best
+
       - name: Upload metrics
         if: always()
         uses: actions/upload-artifact@v4
