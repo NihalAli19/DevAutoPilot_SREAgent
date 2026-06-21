@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     llm_default_provider: str = "ollama"  # ollama | openai | azure | gemini
     ollama_model: str = "llama3.1"
     llm_cloud_model: str = "gpt-5-mini"
+    # Azure OpenAI: 'model' is the deployment name; uses azure_openai_endpoint/key above.
+    azure_openai_api_version: str = "2024-12-01-preview"
+    azure_openai_deployment: str | None = None
 
 
 @lru_cache

@@ -139,10 +139,21 @@ class LLMRouter:
             from agent_framework.ollama import OllamaChatClient
 
             return OllamaChatClient(host=s.ollama_base_url, model=s.ollama_model)
-        if provider in ("openai", "azure"):
+        if provider == "openai":
             from agent_framework.openai import OpenAIChatClient
 
             return OpenAIChatClient(model=s.llm_cloud_model, api_key=s.openai_api_key)
+        if provider == "azure":
+            # OpenAIChatClient wraps AsyncAzureOpenAI when given azure_endpoint;
+            # for Azure the "model" is the deployment name.
+            from agent_framework.openai import OpenAIChatClient
+
+            return OpenAIChatClient(
+                model=s.azure_openai_deployment or s.llm_cloud_model,
+                api_key=s.azure_openai_api_key,
+                azure_endpoint=s.azure_openai_endpoint,
+                api_version=s.azure_openai_api_version,
+            )
         if provider == "gemini":
             from agent_framework.openai import OpenAIChatClient
 
