@@ -68,3 +68,24 @@ def test_default_providers_lead_with_ollama():
     # With no cloud key set (CI default), only Ollama is wired; it's always first.
     router = LLMRouter()
     assert router.providers[0].name == "ollama"
+
+
+def test_chat_client_ollama_is_default():
+    from app.config import Settings
+
+    client = LLMRouter(settings=Settings(llm_default_provider="ollama")).chat_client()
+    assert type(client).__name__ == "OllamaChatClient"
+
+
+def test_chat_client_azure_targets_azure_endpoint():
+    from app.config import Settings
+
+    settings = Settings(
+        llm_default_provider="azure",
+        azure_openai_endpoint="https://example.cognitiveservices.azure.com/",
+        azure_openai_api_key="dummy",
+        azure_openai_deployment="gpt-5-mini",
+    )
+    client = LLMRouter(settings=settings).chat_client()
+    inner = getattr(client, "client", None) or getattr(client, "_client", None)
+    assert inner is not None and "Azure" in type(inner).__name__
