@@ -34,10 +34,11 @@ class MLConfig:
     # Autoregressive lags in points.
     lags: tuple[int, ...] = (1, 2, 3, 12)
 
-    # Eval gate: initial PR-AUC floor. Per plan, after the first real run we reset
-    # this to ~0.05 below the best achieved score so it acts as a regression guard
-    # rather than a trivially-passable bar.
-    pr_auc_floor: float = 0.70
+    # Eval gate: PR-AUC floor as a regression guard (~0.05 below the measured best).
+    # First real run on NAB: best = 0.404 (LSTM-AE), baseline = 0.369 (deterministic),
+    # base rate ~0.16. Floor set to 0.35 so it reliably passes yet still fires on a
+    # real regression. Raise it as models improve. (Gate is wired into CI in slice 4.)
+    pr_auc_floor: float = 0.35
     gate_margin: float = 0.05
 
     seasonal_periods: tuple[int, ...] = field(default=(POINTS_PER_DAY,))

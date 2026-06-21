@@ -1,10 +1,17 @@
-"""Train the LSTM-autoencoder; reconstruction error is the anomaly score."""
-# TODO(plan: Phase 1) — PyTorch LSTM-AE training loop with MLflow tracking.
+"""Train the LSTM-autoencoder detector and log the run to MLflow."""
+
+from __future__ import annotations
+
+from training.common import train_and_log
+from training.lstm_ae import LSTMAutoencoderDetector
 
 
-def main():
-    """Train, evaluate, and register the LSTM-autoencoder model."""
-    raise NotImplementedError("TODO(plan: Phase 1)")
+def main() -> None:
+    det = LSTMAutoencoderDetector()
+    metrics = train_and_log(
+        det, {"seq_len": det.seq_len, "hidden": det.hidden, "epochs": det.epochs}
+    )
+    print("lstm_autoencoder:", metrics)
 
 
 if __name__ == "__main__":

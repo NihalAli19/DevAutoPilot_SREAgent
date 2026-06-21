@@ -37,6 +37,7 @@ data/raw/
 data/processed/
 ml/data/raw/
 ml/data/processed/
+ml/artifacts/
 
 # ---- Node / Next.js ----
 node_modules/
