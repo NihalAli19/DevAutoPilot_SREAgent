@@ -8,6 +8,11 @@ asyncpg
 httpx
 agent-framework
 openai
+# In-process anomaly scoring reuses the ml package's feature pipeline + IF model.
+scikit-learn
+pandas
+numpy
+joblib
 pytest
 pytest-asyncio
 pytest-cov

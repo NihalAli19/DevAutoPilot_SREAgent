@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # ---- GitHub ----
     github_token: str | None = None
 
+    # ---- Anomaly model serving ----
+    # Path to the joblib serving artifact; defaults to ml/models/isolation_forest.joblib.
+    anomaly_model_path: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

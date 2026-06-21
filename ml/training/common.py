@@ -25,18 +25,25 @@ class Detector(Protocol):
 
 
 def configure_mlflow():  # noqa: ANN201 (mlflow module)
-    """Point MLflow at the local file store under ``ml/mlruns`` (gitignored)."""
+    """Point MLflow at a local SQLite tracking store under ``ml/`` (gitignored).
+
+    MLflow 3.x put the filesystem store in maintenance mode and requires a database
+    backend; SQLite keeps it free, local, and cross-platform.
+    """
     import mlflow
 
-    mlflow.set_tracking_uri((ML_DIR / "mlruns").as_uri())
+    mlflow.set_tracking_uri(f"sqlite:///{(ML_DIR / 'mlflow.db').as_posix()}")
     mlflow.set_experiment(EXPERIMENT)
     return mlflow
 
 
 def train_and_log(
     detector: Detector, params: dict[str, Any] | None = None
-) -> dict[str, float]:
-    """Train ``detector`` on the prepared dataset, evaluate, and log to MLflow."""
+) -> tuple[dict[str, float], Detector]:
+    """Train ``detector`` on the prepared dataset, evaluate, and log to MLflow.
+
+    Returns ``(metrics, fitted_detector)`` so callers can persist a serving artifact.
+    """
     from evaluation.evaluate import check_gate, compute_metrics
     from training.dataset import dataset_summary, prepare_datasets, using_real_nab
 
@@ -58,4 +65,4 @@ def train_and_log(
         mlflow.log_metrics({k: v for k, v in metrics.items() if not math.isnan(v)})
         mlflow.log_metrics(dataset_summary(train, test))
         mlflow.set_tag("gate_pass", check_gate(metrics["pr_auc"]))
-    return metrics
+    return metrics, detector

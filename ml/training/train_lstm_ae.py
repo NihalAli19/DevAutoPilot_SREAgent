@@ -8,7 +8,7 @@ from training.lstm_ae import LSTMAutoencoderDetector
 
 def main() -> None:
     det = LSTMAutoencoderDetector()
-    metrics = train_and_log(
+    metrics, _ = train_and_log(
         det, {"seq_len": det.seq_len, "hidden": det.hidden, "epochs": det.epochs}
     )
     print("lstm_autoencoder:", metrics)
