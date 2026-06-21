@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # Path to the joblib serving artifact; defaults to ml/models/isolation_forest.joblib.
     anomaly_model_path: str | None = None
 
+    # ---- LLM routing ----
+    # Local Ollama is the default; cloud (OpenAI/Gemini) is the fallback.
+    ollama_model: str = "llama3.1"
+    llm_cloud_model: str = "gpt-5-mini"
+
 
 @lru_cache
 def get_settings() -> Settings:
