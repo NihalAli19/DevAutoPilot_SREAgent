@@ -1,21 +1,29 @@
 name: ML Pipeline
 
-# TODO(plan: Phase 1) — Implement the MLOps train -> evaluate -> gate -> register flow.
-# Eval-metric gate must FAIL the pipeline (and block deploy) if metrics regress
-# below the configured threshold. This stub only wires the stage structure.
+# Train -> evaluate -> GATE. The eval gate (PR-AUC floor in ml/config.py) fails the
+# pipeline if the best model regresses below the floor — i.e. a bad model can't pass.
+# Registry/deploy of the model is Phase 4 (Azure ML); this slice owns the gate.
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 3 * * 1"   # weekly retrain (Mondays 03:00 UTC)
+    - cron: "0 3 * * 1" # weekly retrain (Mondays 03:00 UTC)
   push:
-    branches: [main, master]
+    branches: [main]
     paths:
       - "ml/**"
+      - ".github/workflows/ml-pipeline.yml"
+
+concurrency:
+  group: ml-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  ml:
-    name: Train, evaluate, gate, register
+  train-eval-gate:
+    name: Train, evaluate, gate
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,14 +43,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Train
-        run: echo "TODO(plan: Phase 1) python -m training.train_isolation_forest"
+      - name: Fetch NAB dataset
+        run: python -m scripts.download_nab
 
-      - name: Evaluate
-        run: echo "TODO(plan: Phase 1) python -m evaluation.evaluate"
+      - name: Train + evaluate + gate (fails if PR-AUC < floor)
+        run: python -m evaluation.evaluate
 
-      - name: Gate (fail if metrics regress below threshold)
-        run: echo "TODO(plan: Phase 1) enforce PR-AUC / F1 gate; exit 1 on regression"
-
-      - name: Register (MLflow / Azure ML)
-        run: echo "TODO(plan: Phase 1) register model version on gate pass"
+      - name: Upload metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-metrics
+          path: ml/artifacts/metrics.json
+          if-no-files-found: ignore

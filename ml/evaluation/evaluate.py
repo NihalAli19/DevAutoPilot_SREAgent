@@ -3,7 +3,8 @@
 Anomaly detectors emit a continuous score; we report PR-AUC (threshold-free) plus
 the precision/recall/F1 at the F1-optimal threshold. ``run_comparison`` trains all
 three detectors and returns a side-by-side table; ``check_gate`` is the regression
-guard wired into CI in a later slice.
+guard wired into CI via ``.github/workflows/ml-pipeline.yml`` (``main`` exits non-zero
+when the best model regresses below the floor).
 """
 
 from __future__ import annotations
@@ -100,15 +101,19 @@ def run_comparison(
     }
 
 
-def main() -> None:
+def main() -> int:
+    """Train + evaluate; print the comparison table and enforce the gate.
+
+    Returns process exit code: 0 if the best model clears the PR-AUC floor, 1 if it
+    regresses below it (this is the CI eval gate that blocks a bad model).
+    """
     out = run_comparison()
     print(format_table(out["results"]))
     best = pick_best(out["results"])
     best_pr_auc = out["results"][best]["pr_auc"]
+    passed = check_gate(best_pr_auc)
     print(f"\nBest model: {best} (PR-AUC {best_pr_auc:.3f})")
-    print(
-        f"Gate (floor {CONFIG.pr_auc_floor:.2f}): {'PASS' if check_gate(best_pr_auc) else 'FAIL'}"
-    )
+    print(f"Gate (floor {CONFIG.pr_auc_floor:.2f}): {'PASS' if passed else 'FAIL'}")
     print(
         f"Data: {'real NAB' if out['real_nab'] else 'vendored sample'} | {out['summary']}"
     )
@@ -118,6 +123,12 @@ def main() -> None:
         json.dumps(out, indent=2), encoding="utf-8"
     )
 
+    if not passed:
+        print(
+            f"GATE FAILED: best PR-AUC {best_pr_auc:.3f} < floor {CONFIG.pr_auc_floor:.2f}"
+        )
+    return 0 if passed else 1
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
