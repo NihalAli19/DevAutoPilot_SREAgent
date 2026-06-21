@@ -3,8 +3,9 @@ uvicorn[standard]
 pydantic
 pydantic-settings
 python-dotenv
-sqlalchemy
+sqlalchemy[asyncio]
 asyncpg
+greenlet
 httpx
 agent-framework
 openai
