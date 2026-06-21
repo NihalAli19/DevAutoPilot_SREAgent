@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # ---- GitHub ----
     github_token: str | None = None
 
+    # ---- Tenancy ----
+    # Single demo tenant until auth/multi-tenancy lands (Phase 5). Must be a UUID.
+    demo_org_id: str = "00000000-0000-0000-0000-000000000001"
+
     # ---- Anomaly model serving ----
     # Path to the joblib serving artifact; defaults to ml/models/isolation_forest.joblib.
     anomaly_model_path: str | None = None

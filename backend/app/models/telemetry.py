@@ -42,3 +42,18 @@ class ScoreResponse(BaseModel):
     feature_version: str
     warmup_skipped: int
     scored: list[ScoredPoint]
+
+
+class SimulateRequest(BaseModel):
+    """Trigger a synthetic anomaly for a live demo."""
+
+    service: str = "checkout"
+    metric: str = "latency_p95"
+    points: int = Field(default=400, ge=300, le=2000)
+
+
+class SimulateResponse(BaseModel):
+    """Result of a simulate run: whether an incident was raised, and its stored record."""
+
+    detected: bool
+    incident: dict | None = None
