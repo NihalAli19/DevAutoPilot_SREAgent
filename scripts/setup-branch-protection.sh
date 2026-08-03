@@ -45,7 +45,7 @@ gh api -X PUT "repos/$REPO/branches/main/protection" \
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["Backend (lint, types, tests)", "ML (pipeline tests)"]
+    "contexts": ["Backend (lint, types, tests)", "ML (pipeline tests)", "Frontend (build)"]
   },
   "enforce_admins": false,
   "required_pull_request_reviews": { "required_approving_review_count": 0 },
