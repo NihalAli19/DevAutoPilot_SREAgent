@@ -9,6 +9,8 @@ greenlet
 httpx
 agent-framework
 openai
+# RAG vector store (Phase 3): Azure AI Search, per docs/IMPLEMENTATION_PLAN.md.
+azure-search-documents
 # In-process anomaly scoring reuses the ml package's feature pipeline + IF model.
 scikit-learn
 pandas
