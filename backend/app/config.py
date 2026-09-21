@@ -39,6 +39,10 @@ class Settings(BaseSettings):
 
     # ---- GitHub ----
     github_token: str | None = None
+    # Explicit allowlist: the Patch Agent can only read/write this owner/repository.
+    github_repository: str | None = None
+    github_base_branch: str = "main"
+    github_api_url: str = "https://api.github.com"
 
     # ---- Tenancy ----
     # Single demo tenant until auth/multi-tenancy lands (Phase 5). Must be a UUID.
