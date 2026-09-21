@@ -8,6 +8,7 @@ asyncpg
 greenlet
 httpx
 agent-framework
+opentelemetry-api
 openai
 # RAG vector store (Phase 3): Azure AI Search, per docs/IMPLEMENTATION_PLAN.md.
 azure-search-documents
