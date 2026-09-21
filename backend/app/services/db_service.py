@@ -6,7 +6,7 @@ truth — no ORM model duplication). The incident ``type`` lives in the ``metada
 since the relational table keys on the core columns.
 """
 
-# TODO(plan: Phase 3) — persist RCA/patch/postmortem rows; richer audit fields.
+# TODO(plan: Phase 3) — persist patch/postmortem rows; add richer audit fields.
 from __future__ import annotations
 
 import json
@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.config import get_settings
 from app.models.incident import Incident
+from app.models.root_cause_analysis import RootCauseAnalysis
 
 _engine: AsyncEngine | None = None
 
@@ -56,6 +57,23 @@ _LIST_INCIDENTS = text("""
 _INSERT_ACTION = text("""
     INSERT INTO agent_actions (org_id, incident_id, agent_name, action, status, output)
     VALUES (:org_id, :incident_id, :agent_name, :action, :status, CAST(:output AS jsonb))
+""")
+
+_INSERT_ROOT_CAUSE_ANALYSIS = text("""
+    INSERT INTO root_cause_analyses
+        (org_id, incident_id, hypothesis, confidence, affected_files, evidence, model)
+    VALUES
+        (:org_id, :incident_id, :hypothesis, :confidence,
+         CAST(:affected_files AS jsonb), CAST(:evidence AS jsonb), :model)
+    RETURNING id, created_at
+""")
+
+_LIST_ROOT_CAUSE_ANALYSES = text("""
+    SELECT id, org_id, incident_id, hypothesis, confidence, affected_files,
+           evidence, model, created_at
+    FROM root_cause_analyses
+    WHERE org_id = :org_id AND incident_id = :incident_id
+    ORDER BY created_at DESC
 """)
 
 
@@ -120,3 +138,48 @@ async def insert_agent_action(
     }
     async with get_engine().begin() as conn:
         await conn.execute(_INSERT_ACTION, params)
+
+
+async def insert_root_cause_analysis(
+    analysis: RootCauseAnalysis,
+) -> RootCauseAnalysis:
+    """Persist an RCA result and return it with its generated id and timestamp."""
+    params = {
+        "org_id": uuid.UUID(analysis.org_id),
+        "incident_id": uuid.UUID(analysis.incident_id),
+        "hypothesis": analysis.hypothesis,
+        "confidence": analysis.confidence,
+        "affected_files": json.dumps(analysis.affected_files),
+        "evidence": json.dumps([item.model_dump() for item in analysis.evidence]),
+        "model": analysis.model,
+    }
+    async with get_engine().begin() as conn:
+        row = (await conn.execute(_INSERT_ROOT_CAUSE_ANALYSIS, params)).mappings().one()
+    return analysis.model_copy(update={"id": str(row["id"]), "created_at": row["created_at"]})
+
+
+async def list_root_cause_analyses(org_id: str, incident_id: str) -> list[RootCauseAnalysis]:
+    """List RCA results for one incident, strictly scoped to its tenant."""
+    params = {"org_id": uuid.UUID(org_id), "incident_id": uuid.UUID(incident_id)}
+    async with get_engine().connect() as conn:
+        rows = (await conn.execute(_LIST_ROOT_CAUSE_ANALYSES, params)).mappings().all()
+
+    return [
+        RootCauseAnalysis(
+            id=str(row["id"]),
+            org_id=str(row["org_id"]),
+            incident_id=str(row["incident_id"]),
+            hypothesis=row["hypothesis"],
+            confidence=row["confidence"],
+            affected_files=_json_value(row["affected_files"]),
+            evidence=_json_value(row["evidence"]),
+            model=row["model"],
+            created_at=row["created_at"],
+        )
+        for row in rows
+    ]
+
+
+def _json_value(value: Any) -> Any:
+    """Normalize JSONB values across asyncpg/SQLAlchemy driver configurations."""
+    return json.loads(value) if isinstance(value, str) else value

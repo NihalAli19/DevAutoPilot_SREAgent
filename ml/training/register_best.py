@@ -44,7 +44,12 @@ def register_best(
         mlflow.log_metrics({k: v for k, v in best_metrics.items() if not math.isnan(v)})
         if best_name == "isolation_forest":
             mlflow.sklearn.log_model(
-                best_det.model, name="model", registered_model_name=registered_name
+                best_det.model,
+                name="model",
+                registered_model_name=registered_name,
+                # The artifact is trained in this pipeline, so its sklearn tree is trusted.
+                # Keep this allowlist narrow; never trust arbitrary types from uploads.
+                skops_trusted_types=["sklearn.tree._tree.Tree"],
             )
         else:
             mlflow.pytorch.log_model(
