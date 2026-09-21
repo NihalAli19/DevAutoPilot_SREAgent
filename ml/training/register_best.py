@@ -9,13 +9,28 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+from mlflow.models import ModelSignature
+from mlflow.types.schema import Schema, TensorSpec
 from config import CONFIG
 from evaluation.evaluate import Metrics, pick_best, train_all
+
 from training.common import configure_mlflow
 
 REGISTERED_NAME = "devautopilot-anomaly"
 # Only trained models are registry candidates; the baseline is the reference floor.
 LEARNED_MODELS = {"isolation_forest", "lstm_autoencoder"}
+
+
+def _lstm_export_contract(
+    seq_len: int, n_features: int
+) -> tuple[np.ndarray, ModelSignature]:
+    """Return the fixed single-window tensor contract required for safe PT2 export."""
+    shape = (1, seq_len, n_features)
+    example = np.zeros(shape, dtype=np.float32)
+    tensor = TensorSpec(np.dtype(np.float32), shape)
+    signature = ModelSignature(inputs=Schema([tensor]), outputs=Schema([tensor]))
+    return example, signature
 
 
 def register_best(
@@ -52,8 +67,16 @@ def register_best(
                 skops_trusted_types=["sklearn.tree._tree.Tree"],
             )
         else:
+            input_example, signature = _lstm_export_contract(
+                best_det.seq_len, len(best_det.cols)
+            )
             mlflow.pytorch.log_model(
-                best_det.model, name="model", registered_model_name=registered_name
+                best_det.model,
+                name="model",
+                registered_model_name=registered_name,
+                input_example=input_example,
+                signature=signature,
+                serialization_format="pt2",
             )
     return best_name, best_metrics
 
