@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.config import get_settings
 from app.models.incident import Incident
+from app.models.patch import PatchProposal
 from app.models.root_cause_analysis import RootCauseAnalysis
 
 _engine: AsyncEngine | None = None
@@ -72,6 +73,23 @@ _LIST_ROOT_CAUSE_ANALYSES = text("""
     SELECT id, org_id, incident_id, hypothesis, confidence, affected_files,
            evidence, model, created_at
     FROM root_cause_analyses
+    WHERE org_id = :org_id AND incident_id = :incident_id
+    ORDER BY created_at DESC
+""")
+
+_INSERT_PATCH = text("""
+    INSERT INTO patches
+        (org_id, incident_id, rca_id, summary, diff, pr_url, pr_number, branch, status, model)
+    VALUES
+        (:org_id, :incident_id, :rca_id, :summary, :diff, :pr_url,
+         :pr_number, :branch, :status, :model)
+    RETURNING id, created_at
+""")
+
+_LIST_PATCHES = text("""
+    SELECT id, org_id, incident_id, rca_id, summary, diff, pr_url, pr_number,
+           branch, status, model, created_at
+    FROM patches
     WHERE org_id = :org_id AND incident_id = :incident_id
     ORDER BY created_at DESC
 """)
@@ -173,6 +191,50 @@ async def list_root_cause_analyses(org_id: str, incident_id: str) -> list[RootCa
             confidence=row["confidence"],
             affected_files=_json_value(row["affected_files"]),
             evidence=_json_value(row["evidence"]),
+            model=row["model"],
+            created_at=row["created_at"],
+        )
+        for row in rows
+    ]
+
+
+async def insert_patch(patch: PatchProposal) -> PatchProposal:
+    """Persist a validated draft-PR proposal."""
+    params = {
+        "org_id": uuid.UUID(patch.org_id),
+        "incident_id": uuid.UUID(patch.incident_id),
+        "rca_id": uuid.UUID(patch.rca_id) if patch.rca_id else None,
+        "summary": patch.summary,
+        "diff": patch.diff,
+        "pr_url": patch.pr_url,
+        "pr_number": patch.pr_number,
+        "branch": patch.branch,
+        "status": patch.status,
+        "model": patch.model,
+    }
+    async with get_engine().begin() as conn:
+        row = (await conn.execute(_INSERT_PATCH, params)).mappings().one()
+    return patch.model_copy(update={"id": str(row["id"]), "created_at": row["created_at"]})
+
+
+async def list_patches(org_id: str, incident_id: str) -> list[PatchProposal]:
+    """List patch proposals for one incident, strictly scoped to its tenant."""
+    params = {"org_id": uuid.UUID(org_id), "incident_id": uuid.UUID(incident_id)}
+    async with get_engine().connect() as conn:
+        rows = (await conn.execute(_LIST_PATCHES, params)).mappings().all()
+
+    return [
+        PatchProposal(
+            id=str(row["id"]),
+            org_id=str(row["org_id"]),
+            incident_id=str(row["incident_id"]),
+            rca_id=str(row["rca_id"]) if row["rca_id"] else None,
+            summary=row["summary"],
+            diff=row["diff"],
+            pr_url=row["pr_url"],
+            pr_number=row["pr_number"],
+            branch=row["branch"],
+            status=row["status"],
             model=row["model"],
             created_at=row["created_at"],
         )
