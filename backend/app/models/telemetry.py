@@ -1,6 +1,6 @@
 """Telemetry + scoring request/response models for POST /api/score."""
 
-# TODO(plan: Phase 2) — persist scored telemetry to the telemetry table.
+# Scored telemetry is persisted by POST /api/score for rollout-health comparisons.
 from __future__ import annotations
 
 from datetime import datetime

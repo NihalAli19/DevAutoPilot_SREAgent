@@ -49,7 +49,7 @@ async def db():
         pytest.skip(f"Postgres not reachable ({exc}); set DATABASE_URL to run DB tests")
     try:
         await conn.execute(_SCHEMA_SQL)
-        await conn.execute("TRUNCATE incidents, agent_actions RESTART IDENTITY CASCADE")
+        await conn.execute("TRUNCATE incidents, agent_actions, telemetry RESTART IDENTITY CASCADE")
     finally:
         await conn.close()
     yield
