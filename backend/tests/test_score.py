@@ -1,5 +1,7 @@
 """Tests for the in-process anomaly scoring service and POST /api/score."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from app.api import score as score_module
@@ -44,3 +46,22 @@ async def test_score_endpoint_missing_model_returns_503(client, tmp_path, monkey
         "/api/score", json={"points": [{"timestamp": "2024-01-01T00:00:00", "value": 1.0}]}
     )
     assert resp.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_score_endpoint_persists_named_service_metric(client, if_artifact, monkeypatch):
+    monkeypatch.setattr(score_module, "_service", AnomalyService(model_path=if_artifact))
+    persist = AsyncMock()
+    monkeypatch.setattr(score_module.db_service, "insert_scored_telemetry", persist)
+
+    resp = await client.post(
+        "/api/score",
+        json={"service": "checkout", "metric": "latency_p95", "points": _points()},
+    )
+
+    assert resp.status_code == 200
+    persist.assert_awaited_once()
+    call = persist.await_args.kwargs
+    assert call["service"] == "checkout"
+    assert call["metric"] == "latency_p95"
+    assert len(call["points"]) == len(resp.json()["scored"])

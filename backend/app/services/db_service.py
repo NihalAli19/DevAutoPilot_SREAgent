@@ -6,12 +6,14 @@ truth — no ORM model duplication). The incident ``type`` lives in the ``metada
 since the relational table keys on the core columns.
 """
 
-# TODO(plan: Phase 3) — persist patch/postmortem rows; add richer audit fields.
+# TODO(plan: Phase 3) — persist postmortem rows; add richer audit fields.
 from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -19,9 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from app.config import get_settings
 from app.models.incident import Incident
 from app.models.patch import PatchProposal
+from app.models.reliability import MetricAggregate
 from app.models.root_cause_analysis import RootCauseAnalysis
+from app.models.telemetry import ScoredPoint
 
 _engine: AsyncEngine | None = None
+_UTC = ZoneInfo("UTC")
 
 
 def get_engine() -> AsyncEngine:
@@ -88,10 +93,35 @@ _INSERT_PATCH = text("""
 
 _LIST_PATCHES = text("""
     SELECT id, org_id, incident_id, rca_id, summary, diff, pr_url, pr_number,
-           branch, status, model, created_at
+           branch, status, approved_by, approved_at, model, created_at
     FROM patches
     WHERE org_id = :org_id AND incident_id = :incident_id
     ORDER BY created_at DESC
+""")
+
+_MARK_PATCH_MERGED = text("""
+    UPDATE patches
+    SET status = 'merged', approved_by = :approved_by, approved_at = :approved_at
+    WHERE org_id = :org_id AND id = :patch_id
+      AND status IN ('draft', 'proposed', 'approved', 'merged')
+    RETURNING id, org_id, incident_id, rca_id, summary, diff, pr_url, pr_number,
+              branch, status, approved_by, approved_at, model, created_at
+""")
+
+_SUMMARIZE_TELEMETRY_WINDOW = text("""
+    SELECT metric, AVG(value)::double precision AS average, COUNT(*)::integer AS sample_count
+    FROM telemetry
+    WHERE org_id = :org_id AND service = :service
+      AND ts >= :start AND ts < :end
+    GROUP BY metric
+    ORDER BY metric
+""")
+
+_INSERT_SCORED_TELEMETRY = text("""
+    INSERT INTO telemetry
+        (org_id, service, metric, value, anomaly_score, is_anomaly, ts)
+    VALUES
+        (:org_id, :service, :metric, :value, :anomaly_score, :is_anomaly, :ts)
 """)
 
 
@@ -223,23 +253,103 @@ async def list_patches(org_id: str, incident_id: str) -> list[PatchProposal]:
     async with get_engine().connect() as conn:
         rows = (await conn.execute(_LIST_PATCHES, params)).mappings().all()
 
+    return [_patch_from_row(row) for row in rows]
+
+
+async def mark_patch_merged(
+    *,
+    org_id: str,
+    patch_id: str,
+    approved_by: str,
+    approved_at: datetime,
+) -> PatchProposal:
+    """Record a human GitHub merge after the Guard verifies it remotely."""
+    params = {
+        "org_id": uuid.UUID(org_id),
+        "patch_id": uuid.UUID(patch_id),
+        "approved_by": approved_by,
+        "approved_at": approved_at,
+    }
+    async with get_engine().begin() as conn:
+        row = (await conn.execute(_MARK_PATCH_MERGED, params)).mappings().one_or_none()
+    if row is None:
+        raise LookupError("patch not found or is not eligible for merge recording")
+    return _patch_from_row(row)
+
+
+async def summarize_telemetry_window(
+    *,
+    org_id: str,
+    service: str,
+    start: datetime,
+    end: datetime,
+) -> list[MetricAggregate]:
+    """Aggregate one tenant/service telemetry window by metric."""
+    params = {
+        "org_id": uuid.UUID(org_id),
+        "service": service,
+        "start": start,
+        "end": end,
+    }
+    async with get_engine().connect() as conn:
+        rows = (await conn.execute(_SUMMARIZE_TELEMETRY_WINDOW, params)).mappings().all()
     return [
-        PatchProposal(
-            id=str(row["id"]),
-            org_id=str(row["org_id"]),
-            incident_id=str(row["incident_id"]),
-            rca_id=str(row["rca_id"]) if row["rca_id"] else None,
-            summary=row["summary"],
-            diff=row["diff"],
-            pr_url=row["pr_url"],
-            pr_number=row["pr_number"],
-            branch=row["branch"],
-            status=row["status"],
-            model=row["model"],
-            created_at=row["created_at"],
+        MetricAggregate(
+            metric=row["metric"],
+            average=float(row["average"]),
+            sample_count=int(row["sample_count"]),
         )
         for row in rows
     ]
+
+
+async def insert_scored_telemetry(
+    *,
+    org_id: str,
+    service: str,
+    metric: str,
+    points: list[ScoredPoint],
+) -> None:
+    """Persist scored observations used by later rollout-health comparisons."""
+    if not points:
+        return
+    params = [
+        {
+            "org_id": uuid.UUID(org_id),
+            "service": service,
+            "metric": metric,
+            "value": point.value,
+            "anomaly_score": point.anomaly_score,
+            "is_anomaly": point.is_anomaly,
+            "ts": (
+                point.timestamp
+                if point.timestamp.tzinfo is not None
+                else point.timestamp.replace(tzinfo=_UTC)
+            ),
+        }
+        for point in points
+    ]
+    async with get_engine().begin() as conn:
+        await conn.execute(_INSERT_SCORED_TELEMETRY, params)
+
+
+def _patch_from_row(row: Any) -> PatchProposal:
+    return PatchProposal(
+        id=str(row["id"]),
+        org_id=str(row["org_id"]),
+        incident_id=str(row["incident_id"]),
+        rca_id=str(row["rca_id"]) if row["rca_id"] else None,
+        summary=row["summary"],
+        diff=row["diff"],
+        pr_url=row["pr_url"],
+        pr_number=row["pr_number"],
+        branch=row["branch"],
+        status=row["status"],
+        approved_by=row["approved_by"],
+        approved_at=row["approved_at"],
+        model=row["model"],
+        created_at=row["created_at"],
+    )
 
 
 def _json_value(value: Any) -> Any:

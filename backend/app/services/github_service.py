@@ -11,6 +11,7 @@ import httpx
 
 from app.config import Settings, get_settings
 from app.models.patch import DraftPullRequest, PatchEdit, RepositoryFile
+from app.models.reliability import PullRequestStatus
 
 _REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$")
@@ -144,6 +145,23 @@ class GitHubService:
             number=int(pull["number"]),
             url=str(pull["html_url"]),
             branch=branch,
+        )
+
+    async def get_pull_request(self, number: int) -> PullRequestStatus:
+        """Read GitHub's authoritative merge state for one target-repository PR."""
+        if number < 1:
+            raise ValueError("pull request number must be positive")
+        pull = await self._request("GET", f"/repos/{self.repository}/pulls/{number}")
+        merged_by = pull.get("merged_by")
+        if merged_by is not None and not isinstance(merged_by, dict):
+            raise ValueError("GitHub returned invalid merged-by metadata")
+        return PullRequestStatus(
+            number=int(pull["number"]),
+            draft=bool(pull["draft"]),
+            merged=bool(pull["merged"]),
+            merged_at=pull.get("merged_at"),
+            merged_by=str(merged_by["login"]) if merged_by else None,
+            merged_by_type=str(merged_by["type"]) if merged_by else None,
         )
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:

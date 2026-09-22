@@ -160,3 +160,31 @@ async def test_get_file_rejects_unsafe_path_before_network_access():
         service = GitHubService(_settings(), client=client)
         with pytest.raises(ValueError, match="unsafe repository path"):
             await service.get_file("../secret.py")
+
+
+@pytest.mark.asyncio
+async def test_get_pull_request_returns_authoritative_merge_evidence():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/repos/acme/faulty-app/pulls/17"
+        return httpx.Response(
+            200,
+            json={
+                "number": 17,
+                "draft": False,
+                "merged": True,
+                "merged_at": "2026-01-01T12:00:00Z",
+                "merged_by": {"login": "reviewer", "type": "User"},
+            },
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://api.github.test"
+    ) as client:
+        service = GitHubService(_settings(), client=client)
+        pull = await service.get_pull_request(17)
+
+    assert pull.merged is True
+    assert pull.draft is False
+    assert pull.merged_by == "reviewer"
+    assert pull.merged_by_type == "User"
+    assert pull.merged_at is not None

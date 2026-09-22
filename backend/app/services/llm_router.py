@@ -127,14 +127,14 @@ class LLMRouter:
         result = self.complete(messages, json_mode=True)
         return json.loads(result.content)
 
-    def chat_client(self):  # noqa: ANN201 — returns an agent_framework chat client
-        """Build the agent-framework chat client for the configured default provider.
+    def chat_client(self, provider: str | None = None):  # noqa: ANN201 — returns an agent_framework chat client
+        """Build an agent-framework client for an override or the configured default.
 
         This is the entrypoint agents use; ``complete``/``classify`` above remain the
         direct (non-agent) path. Provider is config-driven (``llm_default_provider``).
         """
         s = self.settings
-        provider = s.llm_default_provider
+        provider = provider or s.llm_default_provider
         if provider == "ollama":
             from agent_framework.ollama import OllamaChatClient
 

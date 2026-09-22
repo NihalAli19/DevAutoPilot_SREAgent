@@ -45,5 +45,7 @@ class PatchProposal(BaseModel):
     pr_number: int | None = Field(default=None, gt=0)
     branch: str | None = None
     status: Literal["draft", "proposed", "approved", "merged", "rejected"] = "draft"
+    approved_by: str | None = None
+    approved_at: datetime | None = None
     model: str | None = None
     created_at: datetime | None = None

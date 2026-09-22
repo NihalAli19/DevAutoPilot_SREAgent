@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -43,6 +45,13 @@ class Settings(BaseSettings):
     github_repository: str | None = None
     github_base_branch: str = "main"
     github_api_url: str = "https://api.github.com"
+
+    # ---- Reliability Guard ----
+    guard_min_samples: int = Field(default=5, ge=1)
+    guard_escalate_regression_ratio: float = Field(default=0.20, ge=0.0)
+    guard_rollback_regression_ratio: float = Field(default=0.50, ge=0.0)
+    guard_min_confidence: float = Field(default=0.70, ge=0.0, le=1.0)
+    guard_llm_provider: Literal["ollama", "openai", "azure", "gemini"] = "ollama"
 
     # ---- Tenancy ----
     # Single demo tenant until auth/multi-tenancy lands (Phase 5). Must be a UUID.
